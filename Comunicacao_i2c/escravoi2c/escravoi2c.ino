@@ -4,6 +4,10 @@
 #define SLAVE_ADDRESS 0x40
 #define F_CPU 16000000UL
 
+#define DS_PIN    PD2 // D2
+#define STC_PIN   PD3 // D3
+#define SHC_PIN   PD4 // D4
+
 // Protótipos das funções USART
 void USART_init(unsigned int ubrr);
 void USART_send(char data);
@@ -12,6 +16,12 @@ void send_hex(uint8_t num);
 
 // Variáveis globais para o timer
 volatile uint32_t timer0_millis = 0;
+
+// Variáveis globais para os sensores
+int presenca = 0; 
+int temperatura = 0; 
+int inclinacao = 0; 
+int nivel = 0;
 
 // Inicialização do Timer0 para millis()
 void timer0_init() {
@@ -129,6 +139,25 @@ void USART_send_string(const char* str) {
     }
 }
 
+void send_number(uint16_t num) {
+    char buffer[10];
+    uint8_t i = 0;
+
+    if (num == 0) {
+        USART_send('0');
+        return;
+    }
+
+    while (num > 0) {
+        buffer[i++] = (num % 10) + '0';
+        num /= 10;
+    }
+
+    while (i > 0) {
+        USART_send(buffer[--i]);
+    }
+}
+
 void send_hex(uint8_t num) {
     uint8_t nibble;
     
@@ -139,6 +168,139 @@ void send_hex(uint8_t num) {
     // Nibble inferior
     nibble = num & 0x0F;
     USART_send(nibble > 9 ? (nibble - 10 + 'A') : (nibble + '0'));
+}
+
+uint16_t lerADC(int canal) {
+    ADMUX = (1 << REFS0) | (canal & 0x07); // AVCC como VREF + canal.
+    ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // Habilita ADC + prescaler 128.
+    ADCSRA |= (1 << ADSC); // Inicia conversão.
+    while (!(ADCSRA & (1 << ADIF))); // Aguarda fim da conversão.
+    ADCSRA |= (1 << ADIF); // Limpa a flag.
+    return ADC; // Lê ADCL e ADCH (macro definida no avr/io.h).
+}
+
+
+void sensor_presenca(){
+  int valorAnalogico; 
+  valorAnalogico = lerADC(0); // entre 0 a 1023 
+  if(valorAnalogico < 40){
+    presenca = 1;
+  }else{
+    presenca = 0;
+  }
+}
+
+void sensor_temperatura(){
+  int valorAnalogico; 
+  valorAnalogico = lerADC(1); // entre 0 a 1023
+
+  // Converte o valor para tensão (0V a 5V)
+  float tensao = (valorAnalogico * 5.0) / 1023.0;
+
+  // Converte tensão para temperatura (LM35: 10mV/°C)
+  temperatura = tensao * 100;
+}
+
+void sensor_inclinacao(){
+  int valorAnalogico; 
+  valorAnalogico = lerADC(2); // entre 0 a 1023 
+  if(valorAnalogico < 500){
+    inclinacao = 1;
+  }else{
+    inclinacao = 0;
+  }
+}
+
+
+void sensor_nivel(){
+  int valorAnalogico; 
+  valorAnalogico = lerADC(3); // entre 0 a 1023 
+  if(valorAnalogico > 823){
+    nivel = 2;
+  }else if(valorAnalogico < 200){
+    nivel = 0;
+  }
+  else{
+    nivel = 1;
+  }
+}
+
+void acendeLED(volatile uint8_t *ddr, volatile uint8_t *port, uint8_t bit) {
+  *ddr |= (1 << bit);   // Configura como saída
+  *port |= (1 << bit);  // Define como nível alto (acende LED)
+}
+
+void acionaBuzzer(volatile uint8_t *ddr, volatile uint8_t *port, uint8_t bit) {
+  *ddr |= (1 << bit);   // Configura como saída
+  *port |= (1 << bit);  // Nível alto → buzzer ligado
+}
+
+void desligaBuzzer(volatile uint8_t *port, uint8_t bit) {
+  *port &= ~(1 << bit); // Nível baixo → buzzer desligado
+}
+
+// Mapa dos dígitos (nível baixo acende o segmento em ânodo comum)
+uint8_t mapa7Segmentos(uint8_t digito) {
+  //       pgfedcba  <- segmentos Q6 a Q0
+  const uint8_t tabela[] = {
+    0b11000000, // 0
+    0b11111001, // 1
+    0b10100100, // 2
+    0b10110000, // 3
+    0b10011001, // 4
+    0b10010010, // 5
+    0b10000010, // 6
+    0b11111000, // 7
+    0b10000000, // 8
+    0b10010000  // 9
+  };
+  return tabela[digito % 10];
+}
+
+void enviaPara595(uint8_t valor) {
+  // Latch LOW
+  PORTD &= ~(1 << STC_PIN);
+
+  // Envia os bits (MSB primeiro)
+  for (int8_t i = 7; i >= 0; i--) {
+    // Clock LOW
+    PORTD &= ~(1 << SHC_PIN);
+
+    // Define DS
+    if (valor & (1 << i))
+      PORTD |= (1 << DS_PIN);
+    else
+      PORTD &= ~(1 << DS_PIN);
+
+    // Clock HIGH (dados são lidos na borda de subida)
+    PORTD |= (1 << SHC_PIN);
+  }
+
+  // Latch HIGH (armazena os dados nos pinos Q)
+  PORTD |= (1 << STC_PIN);
+}
+
+void setupPWM() {
+  DDRD |= (1 << PD5); // Configura PD5 (D5) como saída
+
+  // Configura Timer0 para Fast PWM
+  // - WGM01 e WGM00 = 1 (Fast PWM)
+  // - COM0B1 = 1, COM0B0 = 0 → Clear OC0B on compare match (não inverte)
+  // - Prescaler = 64 (CS01 = 1, CS00 = 1)
+  TCCR0A = (1 << COM0B1) | (1 << WGM01) | (1 << WGM00);
+  TCCR0B = (1 << CS01) | (1 << CS00);
+}
+
+// Define o valor de PWM no pino D3 (0–255)
+void defineVelocidadeMotor(uint8_t velocidade) {
+  OCR0B = velocidade; // Define duty cycle (0–255)
+}
+
+void setup() {
+  // Configura os pinos D2, D3 e D4 como saída
+  DDRD |= (1 << DS_PIN) | (1 << STC_PIN) | (1 << SHC_PIN);
+  setupPWM();               // Inicializa o PWM no pino D3
+  defineVelocidadeMotor(128); // 50% da velocidade máxima
 }
 
 int main(void) {

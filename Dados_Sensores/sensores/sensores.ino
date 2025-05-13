@@ -5,6 +5,7 @@
 int presenca = 0; 
 int temperatura = 0; 
 int inclinacao = 0; 
+int nivel = 0;
 
 
 void USART_init(unsigned int ubrr) {
@@ -90,6 +91,20 @@ void sensor_inclinacao(){
   }
 }
 
+
+void sensor_nivel(){
+  int valorAnalogico; 
+  valorAnalogico = lerADC(3); // entre 0 a 1023 
+  if(valorAnalogico > 823){
+    nivel = 2;
+  }else if(valorAnalogico < 200){
+    nivel = 0;
+  }
+  else{
+    nivel = 1;
+  }
+}
+
 void setup() {
   
 }
@@ -98,6 +113,7 @@ void loop() {
   sensor_presenca();
   sensor_temperatura();
   sensor_inclinacao();
+  sensor_nivel();
   USART_init(103); // Baud rate 9600 com F_CPU 16MHz 
 
   USART_send_string("Presença: ");
@@ -106,6 +122,8 @@ void loop() {
   send_number(temperatura);
   USART_send_string(" Inclinacao: ");
   send_number(inclinacao);
+  USART_send_string(" Nivel: ");
+  send_number(nivel);
   USART_send_string(" \r\n");
 
   delay(1000);

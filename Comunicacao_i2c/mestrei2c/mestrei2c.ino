@@ -126,6 +126,26 @@ void I2C_Stop() {
     TWCR = (1 << TWINT) | (1 << TWSTO) | (1 << TWEN);
 }
 
+uint16_t lerADC(int canal) {
+    ADMUX = (1 << REFS0) | (canal & 0x07); // AVCC como VREF + canal.
+    ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // Habilita ADC + prescaler 128.
+    ADCSRA |= (1 << ADSC); // Inicia conversão.
+    while (!(ADCSRA & (1 << ADIF))); // Aguarda fim da conversão.
+    ADCSRA |= (1 << ADIF); // Limpa a flag.
+    return ADC; // Lê ADCL e ADCH (macro definida no avr/io.h).
+}
+
+void controle_velocidade(){
+    int valorAnalogico; 
+    valorAnalogico = lerADC(2); // entre 0 a 1023 
+    if(valorAnalogico < 500){
+        inclinacao = 1;
+    }
+    else{
+        inclinacao = 0;
+    }
+}
+
 int main(void) {
     // Inicializações
     timer0_init();
