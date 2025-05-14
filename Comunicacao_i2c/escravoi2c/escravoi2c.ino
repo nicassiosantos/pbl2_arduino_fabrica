@@ -280,27 +280,28 @@ void enviaPara595(uint8_t valor) {
   PORTD |= (1 << STC_PIN);
 }
 
-void setupPWM() {
-  DDRD |= (1 << PD5); // Configura PD5 (D5) como saída
+void setupPWM_D5_D6() {
+  DDRD |= (1 << PD5) | (1 << PD6); // D5 e D6 como saída
 
-  // Configura Timer0 para Fast PWM
-  // - WGM01 e WGM00 = 1 (Fast PWM)
-  // - COM0B1 = 1, COM0B0 = 0 → Clear OC0B on compare match (não inverte)
-  // - Prescaler = 64 (CS01 = 1, CS00 = 1)
-  TCCR0A = (1 << COM0B1) | (1 << WGM01) | (1 << WGM00);
-  TCCR0B = (1 << CS01) | (1 << CS00);
+  // Configura Fast PWM para os dois canais A e B (D6 e D5)
+  TCCR0A = (1 << COM0A1) | (1 << COM0B1) | (1 << WGM01) | (1 << WGM00);
+  TCCR0B = (1 << CS01) | (1 << CS00); // Prescaler = 64
 }
 
-// Define o valor de PWM no pino D3 (0–255)
-void defineVelocidadeMotor(uint8_t velocidade) {
-  OCR0B = velocidade; // Define duty cycle (0–255)
+void definePWM_D5(uint8_t valor) {
+  OCR0B = valor; // D5
+}
+
+void definePWM_D6(uint8_t valor) {
+  OCR0A = valor; // D6
 }
 
 void setup() {
   // Configura os pinos D2, D3 e D4 como saída
   DDRD |= (1 << DS_PIN) | (1 << STC_PIN) | (1 << SHC_PIN);
-  setupPWM();               // Inicializa o PWM no pino D3
-  defineVelocidadeMotor(128); // 50% da velocidade máxima
+  setupPWM_D5_D6();               // Inicializa o PWM no pino D3
+  definePWM_D5(200);
+  definePWM_D6(200);
 }
 
 int main(void) {

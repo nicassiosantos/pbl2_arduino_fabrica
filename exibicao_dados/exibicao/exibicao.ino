@@ -70,7 +70,7 @@ void setup() {
   defineVelocidadeMotor(128); // 50% da velocidade máxima
 }
 
-void setupPWM() {
+void setupPWM_D5() {
   DDRD |= (1 << PD5); // Configura PD5 (D5) como saída
 
   // Configura Timer0 para Fast PWM
@@ -81,16 +81,30 @@ void setupPWM() {
   TCCR0B = (1 << CS01) | (1 << CS00);
 }
 
-// Define o valor de PWM no pino D3 (0–255)
-void defineVelocidadeMotor(uint8_t velocidade) {
+void defineVelocidadeMotor_D5(uint8_t velocidade) {
   OCR0B = velocidade; // Define duty cycle (0–255)
+}
+
+void setupPWM_D6() {
+  DDRD |= (1 << PD6); // Configura PD6 (D6) como saída
+
+  // Configura Timer0 para Fast PWM no canal A
+  // - WGM01 e WGM00 = 1 (Fast PWM)
+  // - COM0A1 = 1, COM0A0 = 0 → Clear OC0A on compare match (não inverte)
+  // - Prescaler = 64 (CS01 = 1, CS00 = 1)
+  TCCR0A = (1 << COM0A1) | (1 << WGM01) | (1 << WGM00);
+  TCCR0B = (1 << CS01) | (1 << CS00);
+}
+
+void defineVelocidadeMotor_D6(uint8_t velocidade) {
+  OCR0A = velocidade; // Define duty cycle no canal A (D6)
 }
 
 
 void loop() {
   // Exemplo: acender o número "3" no display de 7 segmentos
   uint8_t numero = 3;
-  uint8_t segmentos = mapa7Segmentos(numero);
+  uint8_t segmentos = mapa7Segmentos(numero); 
   enviaPara595(segmentos);
   acendeLED(&DDRB, &PORTB, PB5);
   acionaBuzzer(&DDRD, &PORTD, PD2);

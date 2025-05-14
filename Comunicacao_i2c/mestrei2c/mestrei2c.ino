@@ -138,12 +138,8 @@ uint16_t lerADC(int canal) {
 void controle_velocidade(){
     int valorAnalogico; 
     valorAnalogico = lerADC(2); // entre 0 a 1023 
-    if(valorAnalogico < 500){
-        inclinacao = 1;
-    }
-    else{
-        inclinacao = 0;
-    }
+    valorAnalogico = lerADC(3);
+    
 }
 
 int main(void) {
