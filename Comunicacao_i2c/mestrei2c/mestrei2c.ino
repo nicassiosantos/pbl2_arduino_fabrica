@@ -9,6 +9,10 @@
 // Variáveis globais para o timer
 volatile uint32_t timer0_millis = 0;
 
+// variaveis glovais para controle do motor
+int pwm_d5 = 0;
+int pwm_d6 = 0;
+
 // Configuração USART
 void USART_init(unsigned int ubrr) {
     UBRR0H = (unsigned char)(ubrr >> 8);
@@ -126,6 +130,30 @@ void I2C_Stop() {
     TWCR = (1 << TWINT) | (1 << TWSTO) | (1 << TWEN);
 }
 
+bool I2C_WriteByte(int dado) {
+    TWDR = dado; // Coloca o dado no registrador de dados
+    TWCR = (1 << TWINT) | (1 << TWEN); // Inicia transmissão
+
+    // Timeout para aguardar final da transmissão
+    uint32_t timeout = millis() + 100;
+    while (!(TWCR & (1 << TWINT))) {
+        if (millis() > timeout) {
+            USART_send_string("Erro: Timeout na transmissao do dado\r\n");
+            return false;
+        }
+    }
+
+    uint8_t status = TWSR & 0xF8;
+    if (status != 0x28) { // 0x28 = Data transmitido e ACK recebido
+        USART_send_string("Erro ao transmitir dado. Status: 0x");
+        send_hex(status);
+        USART_send_string("\r\n");
+        return false;
+    }
+
+    return true;
+}
+
 uint16_t lerADC(int canal) {
     ADMUX = (1 << REFS0) | (canal & 0x07); // AVCC como VREF + canal.
     ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // Habilita ADC + prescaler 128.
@@ -135,12 +163,22 @@ uint16_t lerADC(int canal) {
     return ADC; // Lê ADCL e ADCH (macro definida no avr/io.h).
 }
 
-void controle_velocidade(){
+    // poten     pwm
+    // 1023      200
+    // 200 * poten = 1023 * pwm
+    //pwm = (200 * poten) / 1023
+void controle_velocidade_motorD5(){
     int valorAnalogico; 
-    valorAnalogico = lerADC(2); // entre 0 a 1023 
-    valorAnalogico = lerADC(3);
-    
+    valorAnalogico = lerADC(0); // entre 0 a 1023
+    pwm_d5 = 25 * valorAnalogico / 128;
+    //pwm_d5 = valorAnalogico;
 }
+
+void controle_velocidade_motorD6(){
+    int valorAnalogico;
+    valorAnalogico = lerADC(1); // entre 0 a 1023 
+    pwm_d6 = 25 * valorAnalogico / 128;
+}   
 
 int main(void) {
     // Inicializações
@@ -184,8 +222,12 @@ int main(void) {
         }
         
         USART_send_string("Comunicacao estabelecida com sucesso!\r\n");
+        I2C_WriteByte(pwm_d5);
+        I2C_WriteByte(pwm_d6);
         I2C_Stop();
         delay_ms(2000);
+        controle_velocidade_motorD5();
+        controle_velocidade_motorD6();
     }
     
     return 0;

@@ -88,9 +88,9 @@ ISR(TWI_vect) {
             
         case 0x80:  // TW_SR_DATA_ACK: Dado recebido
         {
-            uint8_t data = TWDR;
-            USART_send_string("Dado recebido: 0x");
-            send_hex(data);
+            int data = TWDR;
+            USART_send_string("Dado recebido: ");
+            send_number(data);
             USART_send_string("\r\n");
             
             // Controle do LED (PB5 - pino 13 no Arduino)
