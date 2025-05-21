@@ -132,7 +132,7 @@ void loop() {
   USART_send_string("PWM D5: ");
   send_number(pwm_d5);
   USART_send_string("PWM D6: ");
-  send_number(pwm_d6);
+  send_number(pwm_d6);  
   USART_send_string("\n");
   delay(2000);
 }
