@@ -8,6 +8,10 @@
 #define STC_PIN   PD3 // D3
 #define SHC_PIN   PD4 // D4
 
+#define MAX_BUFFER_SIZE 64
+volatile char i2c_buffer[MAX_BUFFER_SIZE];
+volatile uint8_t buffer_index = 0;
+
 // Protótipos das funções USART
 void USART_init(unsigned int ubrr);
 void USART_send(char data);
@@ -88,28 +92,32 @@ ISR(TWI_vect) {
             
         case 0x80:  // TW_SR_DATA_ACK: Dado recebido
         {
-            int data = TWDR;
-            USART_send_string("Dado recebido: ");
-            send_number(data);
-            USART_send_string("\r\n");
-            
-            // Controle do LED (PB5 - pino 13 no Arduino)
-            if(data == 0x55) {
-                PORTB |= (1 << PB5);
-                USART_send_string("LED LIGADO\r\n");
-            } else if(data == 0xAA) {
-                PORTB &= ~(1 << PB5);
-                USART_send_string("LED DESLIGADO\r\n");
-            }
-            
-            TWCR |= (1 << TWEA);
-            break;
+          char data = TWDR;
+          USART_send_string("Dado recebido: ");
+          send_number(data);
+          USART_send_string("\r\n");
+
+          // Armazena no buffer se ainda houver espaço
+          if (buffer_index < MAX_BUFFER_SIZE - 1) {
+              i2c_buffer[buffer_index++] = data;
+          }
+
+          TWCR |= (1 << TWEA); // Continua aceitando dados
+          break;
         }
             
         case 0xA0:  // TW_SR_STOP: STOP recebido
-            USART_send_string("STOP recebido - comunicacao concluida\r\n");
-            TWCR |= (1 << TWEA);
-            break;
+        {
+          i2c_buffer[buffer_index] = '\0'; // Finaliza a string
+
+          USART_send_string("String recebida: ");
+          USART_send_string((char*)i2c_buffer);
+          USART_send_string("\r\n");
+
+          buffer_index = 0; // Reinicia índice do buffer
+          TWCR |= (1 << TWEA);
+          break;
+        }
             
         default:
             USART_send_string("Estado desconhecido: 0x");

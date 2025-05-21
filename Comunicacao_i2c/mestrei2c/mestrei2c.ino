@@ -154,6 +154,33 @@ bool I2C_WriteByte(int dado) {
     return true;
 }
 
+bool I2C_WriteString(const char* str) {
+    while (*str) {
+        TWDR = *str++; // Envia caractere atual e avança o ponteiro
+        TWCR = (1 << TWINT) | (1 << TWEN); // Inicia transmissão
+
+        // Timeout para aguardar final da transmissão
+        uint32_t timeout = millis() + 100;
+        while (!(TWCR & (1 << TWINT))) {
+            if (millis() > timeout) {
+                USART_send_string("Erro: Timeout na transmissao do dado\r\n");
+                return false;
+            }
+        }
+
+        uint8_t status = TWSR & 0xF8;
+        if (status != 0x28) { // 0x28 = Data transmitido e ACK recebido
+            USART_send_string("Erro ao transmitir dado. Status: 0x");
+            send_hex(status);
+            USART_send_string("\r\n");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
 uint16_t lerADC(int canal) {
     ADMUX = (1 << REFS0) | (canal & 0x07); // AVCC como VREF + canal.
     ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // Habilita ADC + prescaler 128.
@@ -222,8 +249,7 @@ int main(void) {
         }
         
         USART_send_string("Comunicacao estabelecida com sucesso!\r\n");
-        I2C_WriteByte(pwm_d5);
-        I2C_WriteByte(pwm_d6);
+        I2C_WriteString("ssssss");
         I2C_Stop();
         delay_ms(2000);
         controle_velocidade_motorD5();
