@@ -37,8 +37,8 @@ void send_hex(uint8_t num) {
 
 void setup() {
   Wire.begin();  // Inicia como mestre
-  //Serial.begin(9600);
-  USART_init(103);
+  Serial.begin(9600);
+  //USART_init(103);
   USART_send_string("Mestre I2C iniciado. Envie 'PING' pelo monitor serial.\n");
 }
 
