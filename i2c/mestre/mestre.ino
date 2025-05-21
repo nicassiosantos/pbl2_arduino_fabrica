@@ -1,24 +1,30 @@
 #include <Wire.h>
 
 void setup() {
-  Wire.begin();        // Inicia o I2C como mestre
+  Wire.begin();  // Inicia como mestre
   Serial.begin(9600);
+  Serial.println("Mestre I2C iniciado. Envie 'PING' pelo monitor serial.");
 }
 
 void loop() {
-  // Envia um comando (0x01 ou 0x02) para o escravo
-  uint8_t command = 0x02;  // Teste alterando para 0x02
-  Wire.beginTransmission(0x40);  // Endereço do escravo
-  Wire.write(command);           // Envia o comando
-  Wire.endTransmission();
+  if (Serial.available()) {
+    String input = Serial.readStringUntil('\n');  // Lê do monitor serial
+    input.trim();  // Remove espaços e newlines extras
 
-  // Solicita 1 byte de resposta do escravo
-  Wire.requestFrom(0x40, 1);
-  if (Wire.available()) {
-    uint8_t response = Wire.read();
-    Serial.print("Resposta do escravo: 0x");
-    Serial.println(response, HEX);  // Deve imprimir 0x55 ou 0xAA
+    // Envia a string para o escravo
+    Wire.beginTransmission(0x40);
+    Wire.write(input.c_str());
+    Wire.endTransmission();
+
+    // Solicita resposta (lê até 32 bytes ou encontrar '\n')
+    Wire.requestFrom(0x40, 32);
+    String response = "";
+    while (Wire.available()) {
+      char c = Wire.read();
+      if (c == '\n') break;  // Para ao encontrar o terminador
+      response += c;
+    }
+    Serial.print("Resposta do escravo: ");
+    Serial.println(response);
   }
-
-  delay(1000);  // Espera 1 segundo antes de repetir
 }
