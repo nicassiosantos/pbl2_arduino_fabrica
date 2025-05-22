@@ -94,8 +94,6 @@ void enviar_fabrica_Velocidade(){
     sprintf(msg, "P2:%d", pwm_d6);
     enviou = 0;
   }
-  USART_send_string(msg);
-  USART_send_string("\n");
   Wire.beginTransmission(0x40);
   Wire.write(msg);
   Wire.endTransmission();
@@ -117,10 +115,9 @@ void enviar_fabrica_Velocidade(){
 void pedir_dados(){
   
   // Envia a string para o escravo
-  char msg = 'D';   
+  char msg;
+  msg = 'D';   
 
-  USART_send_string(msg);
-  USART_send_string("\n");
   Wire.beginTransmission(0x40);
   Wire.write(msg);
   Wire.endTransmission();
@@ -145,12 +142,12 @@ void setup() {
   Wire.begin();  // Inicia como mestre
   //Serial.begin(9600);
   USART_init(103);
-  USART_send_string("Mestre I2C iniciado. Envie 'PING' pelo monitor serial.\n");
+  USART_send_string("Mestre I2C iniciado.\n");
 }
 
 void loop() {
   enviar_fabrica_Velocidade();
-  enviar_fabrica_Velocidade();
+  pedir_dados();
   controle_velocidade_motorD5();
   controle_velocidade_motorD6();
   USART_send_string("PWM D5: ");
@@ -158,5 +155,5 @@ void loop() {
   USART_send_string("PWM D6: ");
   send_number(pwm_d6);  
   USART_send_string("\n");
-  delay(2000);
+  delay(700);
 }

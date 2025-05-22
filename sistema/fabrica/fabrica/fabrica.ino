@@ -4,7 +4,9 @@
 #include <stdlib.h>
 
 #define I2C_ADDRESS 0x40  // Endereço do escravo
-
+#define BUTTON_PIN 12
+#define BUTTON_MASK (1 << 4)
+#define INTERRUPT_PIN PCINT4
 #define SER    PD2 // D2 -- DATA (DS)
 #define RCLK   PD3 // D3 -- CLOCK (SH_CP)
 #define SRCLK   PD4 // D4 -- LATCH (ST_CP)
@@ -14,25 +16,31 @@ int presenca = 0;
 int temperatura = 0; 
 int inclinacao = 0; 
 int nivel = 0;
+char msg[100];  
 
 int status = 0;
-int v1 = 0;
-int v2 = 0;
-int v1_ant = 0;
-int v2_ant = 0;
+float v1 = 0;
+float v2 = 0;
+float v1_ant = 0;
+float v2_ant = 0;
 int blocos = 0;
 int control_vel1 = 0;
 int control_vel2 = 0;
 float tempo_atual = 0;
-float tempo_ant = 0;
+float tempo_ant1 = 0;
+float tempo_ant2 = 0;
+float rotacoes1 = 0;
+float rotacoes2 = 0;
+float centimetros1 = 0;
+float centimetros2 = 0; 
 
 volatile unsigned long millis_timer1 = 0;
 
 String receivedString = "";  // Armazena a string recebida
 String responseString = "PONG";  // Resposta padrão
 
-int pw1 = 0; 
-int pw2 = 0;
+float pw1 = 0; 
+float pw2 = 0;
 
 // Implementação da USART
 void USART_init(unsigned int ubrr) {
@@ -91,23 +99,25 @@ void receiveEvent(int numBytes) {
     receivedString += c;  // Concatena cada byte recebido
   }
   const char* resp = receivedString.c_str();
-  USART_send_string("Recebido: ");
-  USART_send_string(resp);
-  USART_send_string("\n");
+  //USART_send_string("Recebido: ");
+  //USART_send_string(resp);
+  //USART_send_string("\n");
 
   // Define a resposta baseada no comando
   if (resp[0] == 'P' && resp[1] == '1') {
     responseString = "RECEBIDO:V1";
     pw1 = atoi(&resp[3]); 
     send_number(pw1); 
-    USART_send_string("\n");
+    USART_send_string(" ");
   } else if(resp[0] == 'P' && resp[1] == '2'){
     responseString = "RECEBIDO:V2";
     pw2 = atoi(&resp[3]); 
     send_number(pw2); 
     USART_send_string("\n");
   }else if(resp[0] == 'D'){
-    responseString = String(temperatura) + ";" + String(inclinacao) + ";" + String(presenca) + ";" + String(nivel) + ";" + String(status) + ";";
+    responseString = String(temperatura) + ";" + String(inclinacao) + ";" + String(presenca) + ";" + 
+    String(nivel) + ";" + String(status) + ";"+ String(v1) + ";"+ String(v2) + ";"+ String(blocos) + ";";
+    //USART_send_string(responseString.c_str());
   }else{
     responseString = "COMANDO INVALIDO";
   }
@@ -248,18 +258,48 @@ void definePWM_D5() { // vertical 10
   OCR0B = pw1; // D5
   // 255 200
   // pw1   x
-  v1_ant = v1;
-  v1 = (pw1 * 200) / 255;
-
+  v1 = (pw1 * 5000) / 255;
+  if(v1 == v1_ant){
+    float temp = tempo_atual - tempo_ant1; 
+    rotacoes1 = temp*(v1/60000);
+    centimetros1 += rotacoes1/20;
+    tempo_ant1 = tempo_atual;
+  }else{ 
+    float temp = tempo_atual - tempo_ant1; 
+    rotacoes1 = temp*(v1_ant/60000);
+    centimetros1 += rotacoes1/20;
+    v1_ant = v1;
+    tempo_ant1 = tempo_atual;
+  }
 }
 
 void definePWM_D6() { // horizontal 25
   OCR0A = pw2; // D6
-  v2 = (pw2 * 200) / 255;
+  v2 = (pw2 * 5000) / 255;
   if(v2 == v2_ant){
-    
+    float temp = tempo_atual - tempo_ant2; 
+    rotacoes2 = temp*(v2/60000);
+    centimetros2 += rotacoes2/20;
+    tempo_ant2 = tempo_atual;
+    //sprintf(msg, "rotacoes:%.2f", rotacoes2);
+    //Serial.println(centimetros2);
+  }else{ 
+    float temp = tempo_atual - tempo_ant2; 
+    rotacoes2 = temp*(v2_ant/60000);
+    centimetros2 += rotacoes2/20;
+    v2_ant = v2;
+    tempo_ant2 = tempo_atual;
   }
-  v2_ant = v2;
+  
+}
+
+void contar_bloco(){ 
+  if(centimetros1 >= 10 && centimetros2 >= 25){
+    blocos +=1;
+    centimetros1 = 0; 
+    centimetros2 = 0;
+  }
+  
 }
 
 void contador_mili(){
@@ -284,17 +324,20 @@ void contador_mili(){
 
 ISR(TIMER1_COMPA_vect) {
   millis_timer1++;
+  tempo_atual = millis_timer1;
 }
 
 
 
 void setup() {
-  USART_init(103);
+  //USART_init(103);
+  Serial.begin(9600);
   Wire.begin(I2C_ADDRESS);
   Wire.onReceive(receiveEvent);
   Wire.onRequest(requestEvent);
   USART_send_string("Escravo I2C pronto (com terminador)! \n");
   setupPWM_D5_D6();
+  contador_mili();
   sei();
 }
 
@@ -305,7 +348,11 @@ void loop() {
   sensor_nivel();
   definePWM_D5();
   definePWM_D6();
-
+  contar_bloco();
+  Serial.println(centimetros1);
+  Serial.println(centimetros2);
+  Serial.println(blocos);
+  
   /*
   USART_send_string("Presença: ");
   send_number(presenca);
@@ -317,5 +364,5 @@ void loop() {
   send_number(nivel);
   USART_send_string("\n");
   */
-  delay(500);
+  delay(200);
 }
