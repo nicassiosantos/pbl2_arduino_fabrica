@@ -5,15 +5,28 @@
 
 #define I2C_ADDRESS 0x40  // Endereço do escravo
 
-#define DS_PIN    PD2 // D2
-#define STC_PIN   PD3 // D3
-#define SHC_PIN   PD4 // D4
+#define SER    PD2 // D2 -- DATA (DS)
+#define RCLK   PD3 // D3 -- CLOCK (SH_CP)
+#define SRCLK   PD4 // D4 -- LATCH (ST_CP)
 
 // Variáveis globais para os sensores
 int presenca = 0; 
 int temperatura = 0; 
 int inclinacao = 0; 
 int nivel = 0;
+
+int status = 0;
+int v1 = 0;
+int v2 = 0;
+int v1_ant = 0;
+int v2_ant = 0;
+int blocos = 0;
+int control_vel1 = 0;
+int control_vel2 = 0;
+float tempo_atual = 0;
+float tempo_ant = 0;
+
+volatile unsigned long millis_timer1 = 0;
 
 String receivedString = "";  // Armazena a string recebida
 String responseString = "PONG";  // Resposta padrão
@@ -93,6 +106,8 @@ void receiveEvent(int numBytes) {
     pw2 = atoi(&resp[3]); 
     send_number(pw2); 
     USART_send_string("\n");
+  }else if(resp[0] == 'D'){
+    responseString = String(temperatura) + ";" + String(inclinacao) + ";" + String(presenca) + ";" + String(nivel) + ";" + String(status) + ";";
   }else{
     responseString = "COMANDO INVALIDO";
   }
@@ -158,18 +173,31 @@ void sensor_nivel(){
   }
 }
 
-void acendeLED(volatile uint8_t *ddr, volatile uint8_t *port, uint8_t bit) {
-  *ddr |= (1 << bit);   // Configura como saída
-  *port |= (1 << bit);  // Define como nível alto (acende LED)
+void acendeLED_R() {
+  DDRB |= (1 << DDB1);
+  PORTB |= (1 << PORTB1);
 }
 
-void acionaBuzzer(volatile uint8_t *ddr, volatile uint8_t *port, uint8_t bit) {
-  *ddr |= (1 << bit);   // Configura como saída
-  *port |= (1 << bit);  // Nível alto → buzzer ligado
+void acendeLED_G() {
+  DDRB |= (1 << DDB0);
+  PORTB |= (1 << PORTB0);
 }
 
-void desligaBuzzer(volatile uint8_t *port, uint8_t bit) {
-  *port &= ~(1 << bit); // Nível baixo → buzzer desligado
+void apagaLED_R() {
+  PORTB &= ~(1 << PORTB1); // Desliga o LED no pino D9
+}
+
+void apagaLED_G() {
+  PORTB &= ~(1 << PORTB0); // Desliga o LED no pino D8
+}
+
+void acionaBuzzer() {
+  DDRB |= (1 << DDB2);    // Configura D10 (PORTB2) como saída
+  PORTB |= (1 << PORTB2); // Nível alto → buzzer ligado
+}
+
+void desligaBuzzer() {
+  PORTB &= ~(1 << PORTB2); // Nível baixo → buzzer desligado
 }
 
 // Mapa dos dígitos (nível baixo acende o segmento em ânodo comum)
@@ -190,27 +218,22 @@ uint8_t mapa7Segmentos(uint8_t digito) {
   return tabela[digito % 10];
 }
 
-void enviaPara595(uint8_t valor) {
-  // Latch LOW
-  PORTD &= ~(1 << STC_PIN);
+void shiftOut_74HC595(uint8_t valor) {
+    for (int8_t i = 7; i >= 0; i--) {
+        // Seta o bit no pino SER
+        if (valor & (1 << i))
+            PORTB |= (1 << SER);
+        else
+            PORTB &= ~(1 << SER);
 
-  // Envia os bits (MSB primeiro)
-  for (int8_t i = 7; i >= 0; i--) {
-    // Clock LOW
-    PORTD &= ~(1 << SHC_PIN);
+        // Pulso no clock (SRCLK)
+        PORTB |= (1 << SRCLK);
+        PORTB &= ~(1 << SRCLK);
+    }
 
-    // Define DS
-    if (valor & (1 << i))
-      PORTD |= (1 << DS_PIN);
-    else
-      PORTD &= ~(1 << DS_PIN);
-
-    // Clock HIGH (dados são lidos na borda de subida)
-    PORTD |= (1 << SHC_PIN);
-  }
-
-  // Latch HIGH (armazena os dados nos pinos Q)
-  PORTD |= (1 << STC_PIN);
+    // Pulso no latch (RCLK) para atualizar as saídas
+    PORTB |= (1 << RCLK);
+    PORTB &= ~(1 << RCLK);
 }
 
 void setupPWM_D5_D6() {
@@ -221,22 +244,58 @@ void setupPWM_D5_D6() {
   TCCR0B = (1 << CS01) | (1 << CS00); // Prescaler = 64
 }
 
-void definePWM_D5() {
+void definePWM_D5() { // vertical 10
   OCR0B = pw1; // D5
+  // 255 200
+  // pw1   x
+  v1_ant = v1;
+  v1 = (pw1 * 200) / 255;
+
 }
 
-void definePWM_D6(uint8_t valor) {
-
+void definePWM_D6() { // horizontal 25
   OCR0A = pw2; // D6
+  v2 = (pw2 * 200) / 255;
+  if(v2 == v2_ant){
+    
+  }
+  v2_ant = v2;
 }
+
+void contador_mili(){
+  // Configura Timer1 para CTC (Clear Timer on Compare Match)
+  TCCR1A = 0;              // Normal operation
+  TCCR1B = 0;
+
+  // Modo CTC: WGM12 = 1
+  TCCR1B |= (1 << WGM12);
+
+  // Prescaler = 64
+  TCCR1B |= (1 << CS11) | (1 << CS10);
+
+  // Valor de comparação para 1 ms:
+  // 16 MHz / 64 = 250.000 ticks por segundo
+  // 250.000 ticks / 1000 = 250 ticks por milissegundo
+  OCR1A = 250 - 1;
+
+  // Habilita interrupção por comparação
+  TIMSK1 |= (1 << OCIE1A);
+}
+
+ISR(TIMER1_COMPA_vect) {
+  millis_timer1++;
+}
+
+
 
 void setup() {
-  Serial.begin(9600);
+  USART_init(103);
   Wire.begin(I2C_ADDRESS);
   Wire.onReceive(receiveEvent);
   Wire.onRequest(requestEvent);
   USART_send_string("Escravo I2C pronto (com terminador)! \n");
   setupPWM_D5_D6();
+  sei();
 }
 
 void loop() {
@@ -244,6 +303,8 @@ void loop() {
   sensor_temperatura();
   sensor_inclinacao();
   sensor_nivel();
+  definePWM_D5();
+  definePWM_D6();
 
   /*
   USART_send_string("Presença: ");

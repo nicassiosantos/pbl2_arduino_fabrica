@@ -4,9 +4,12 @@
 #define SLAVE_ADDRESS 0x40
 #define F_CPU 16000000UL
 
-#define DS_PIN    PD2 // D2
-#define STC_PIN   PD3 // D3
-#define SHC_PIN   PD4 // D4
+#define SER    PD2 // D2
+#define RCLK   PD3 // D3
+#define SRCLK   PD4 // D4
+// Pinos de controle dos dígitos (comum dos displays)
+#define DIG1  PD2
+#define DIG2  PD3
 
 #define MAX_BUFFER_SIZE 64
 volatile char i2c_buffer[MAX_BUFFER_SIZE];
@@ -248,44 +251,35 @@ void desligaBuzzer(volatile uint8_t *port, uint8_t bit) {
 }
 
 // Mapa dos dígitos (nível baixo acende o segmento em ânodo comum)
-uint8_t mapa7Segmentos(uint8_t digito) {
-  //       pgfedcba  <- segmentos Q6 a Q0
-  const uint8_t tabela[] = {
-    0b11000000, // 0
-    0b11111001, // 1
-    0b10100100, // 2
-    0b10110000, // 3
-    0b10011001, // 4
-    0b10010010, // 5
-    0b10000010, // 6
-    0b11111000, // 7
-    0b10000000, // 8
-    0b10010000  // 9
-  };
-  return tabela[digito % 10];
-}
+const uint8_t numeros[10] = {
+    0b00111111, // 0
+    0b00000110, // 1
+    0b01011011, // 2
+    0b01001111, // 3
+    0b01100110, // 4
+    0b01101101, // 5
+    0b01111101, // 6
+    0b00000111, // 7
+    0b01111111, // 8
+    0b01101111  // 9
+};
 
-void enviaPara595(uint8_t valor) {
-  // Latch LOW
-  PORTD &= ~(1 << STC_PIN);
+void shiftOut_74HC595(uint8_t valor) {
+    for (int8_t i = 7; i >= 0; i--) {
+        // Seta o bit no pino SER
+        if (valor & (1 << i))
+            PORTB |= (1 << SER);
+        else
+            PORTB &= ~(1 << SER);
 
-  // Envia os bits (MSB primeiro)
-  for (int8_t i = 7; i >= 0; i--) {
-    // Clock LOW
-    PORTD &= ~(1 << SHC_PIN);
+        // Pulso no clock (SRCLK)
+        PORTB |= (1 << SRCLK);
+        PORTB &= ~(1 << SRCLK);
+    }
 
-    // Define DS
-    if (valor & (1 << i))
-      PORTD |= (1 << DS_PIN);
-    else
-      PORTD &= ~(1 << DS_PIN);
-
-    // Clock HIGH (dados são lidos na borda de subida)
-    PORTD |= (1 << SHC_PIN);
-  }
-
-  // Latch HIGH (armazena os dados nos pinos Q)
-  PORTD |= (1 << STC_PIN);
+    // Pulso no latch (RCLK) para atualizar as saídas
+    PORTB |= (1 << RCLK);
+    PORTB &= ~(1 << RCLK);
 }
 
 void setupPWM_D5_D6() {
@@ -305,8 +299,10 @@ void definePWM_D6(uint8_t valor) {
 }
 
 void setup() {
-  // Configura os pinos D2, D3 e D4 como saída
-  DDRD |= (1 << DS_PIN) | (1 << STC_PIN) | (1 << SHC_PIN);
+  // Pinos do 74HC595 como saída
+  DDRB |= (1 << SER) | (1 << SRCLK) | (1 << RCLK);
+  // Pinos dos dígitos como saída
+  DDRD |= (1 << DIG1) | (1 << DIG2);
   setupPWM_D5_D6();               // Inicializa o PWM no pino D3
   definePWM_D5(200);
   definePWM_D6(200);
