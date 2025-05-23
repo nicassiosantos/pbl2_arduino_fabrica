@@ -40,7 +40,7 @@ volatile bool buttonPressed = false;
 int debounceTime = 50; // tempo de debounce em ms
 
 String receivedString = "";  // Armazena a string recebida
-String responseString = "PONG";  // Resposta padrão
+String responseString = "";  // Resposta padrão
 
 float pw1 = 0; 
 float pw2 = 0;
@@ -121,6 +121,12 @@ void receiveEvent(int numBytes) {
     responseString = String(temperatura) + ";" + String(inclinacao) + ";" + String(presenca) + ";" + 
     String(nivel) + ";" + String(status) + ";"+ String(v1) + ";"+ String(v2) + ";"+ String(blocos) + ";";
     //USART_send_string(responseString.c_str());
+  }else if(resp[0] == 'P'){
+    status = 0;
+    responseString = "Parou";
+  }else if(resp[0] == 'C'){
+    status = 1;
+    responseString = "Continua";
   }else{
     responseString = "COMANDO INVALIDO";
   }
