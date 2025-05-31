@@ -37,6 +37,7 @@ O problema proposto é um controle de uma planta industrial que deve ser desenvo
 - Bibliotecas utilizadas: Wire.h e avr.h;
 - Protocolo de Comunicação: I2C;
 - Ambiente de desenvolvimento: Arduino IDE;
+- Software de simulação: SimulIDE.
 
 ### Recursos utilizados
 - 2x Arduino Nano ATmega328p: Microcontroladores para supervisor e chão de fábrica ;
@@ -86,5 +87,6 @@ O sistema inicia com a comunicação entre as duas partes, supervisor e fábrica
 |LED VERMELHO             |	D9         |
 |BOTÃO                    |	D12        |
  		
-## Simulação
-
+## Esquema do circuito no simulador
+![Esquema](IMG/esquema.png)
+- **Figura 1:** *Esquema do circuito no simulador.*
