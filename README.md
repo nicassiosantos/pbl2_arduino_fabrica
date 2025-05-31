@@ -87,6 +87,6 @@ O sistema inicia com a comunicação entre as duas partes, supervisor e fábrica
 |LED VERMELHO             |	D9         |
 |BOTÃO                    |	D12        |
  		
-## Esquema do circuito no simulador
+## Esquema do circuito
 ![Esquema](IMG/esquema.png)
-- **Figura 1:** *Esquema do circuito no simulador.*
+- **Figura 2:** *Esquema do circuito no simulador.*
