@@ -355,7 +355,7 @@ ISR(PCINT0_vect) {
 
 void setup() {
   USART_init(103); //Inicia UART com o baudrate de 9600
-  //pinos de buzzer e leds e motorzinho
+  //pinos de leds e motorzinho
   DDRD |= (1 << DDD7);  // D7
   DDRB |= (1 << DDB0);  // D8
   DDRB |= (1 << DDB1);  // D9
