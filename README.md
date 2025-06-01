@@ -55,10 +55,15 @@ O problema proposto é um controle de uma planta industrial que deve ser desenvo
 ![Diagrama](IMG/diagrama.png)
 - **Figura 1:** *Diagrama geral do funcionamento do do sistema.*
 
-### Arquitetura geral do sistema
+### Fluxo de funcionamento
 
-O sistema inicia com a comunicação entre as duas partes, supervisor e fábrica, feita via I2C onde o supervisor funciona como o Mestre e a fábrica como o Escravo.
-...............
+O sistema inicia com a comunicação entre as duas partes, supervisor e fábrica, feita via I2C, onde o supervisor funciona como o Mestre e a fábrica como o Escravo.
+
+Após a inicialização, o LED verde é aceso, o supervisor manda a cada 3 segundos um pedido de dados à fábrica com o char *D*, a fábrica envia como resposta uma string contendo os valores de cada sensor separado por ponto e vírgula. Esse fluxo continua até que seja recebido uma mensagem de parada de produção da fábrica por detecção de sensores ou quando for acionada a interrupção externa tanto da fábrica quanto do próprio supervisor, nesses casos 
+
+Quando ocorre a parada da fábrica, os motores desligam, suas velocidades são definidas como 0, a mensagem de dados continua, mas témbém é enviada uma mensagem de parada, a mensagem depende do tipo de interrupção que ocorreu, nesses casos, o LED verde é apagado e o vermelho é aceso. Em caso de parada por detecção do sensor de inclinação, o terceiro motor é acionado, no caso do produto desenvolvido, é usado um LED amarelo para substituir o motor, que é aceso na detecção de inclinação, e apagado quando a inclinação volta ao normal.
+
+O fluxo volta ao normal quando as condições de funcionamento da fábrica estão corretas, ou em caso de interrupção externa, quando o botão é pressionado novamente, com isso, o LED vermelho é apagado e o verde aceso.
 
 
 ### Pinos utilizados
